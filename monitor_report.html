@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Server Monitor</title>
+  <style>
+    :root {
+      --bg: #f5efe3;
+      --panel: rgba(255, 250, 242, 0.92);
+      --line: rgba(31, 41, 51, 0.12);
+      --text: #1f2933;
+      --subtle: #52606d;
+      --green: #14532d;
+      --teal: #0f766e;
+      --amber: #b45309;
+      --red: #b91c1c;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(20,83,45,0.18), transparent 30%),
+        linear-gradient(180deg, #f8f4ea 0%, #efe8db 100%);
+      min-height: 100vh;
+    }
+    .wrap {
+      width: min(1320px, calc(100% - 24px));
+      margin: 20px auto 32px;
+    }
+    .hero, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+    }
+    .hero {
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(28px, 4vw, 40px);
+    }
+    p {
+      margin: 0;
+      color: var(--subtle);
+      line-height: 1.6;
+    }
+    .meta, .cards, .grid, .filters, .quick {
+      display: grid;
+      gap: 12px;
+    }
+    .meta {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-top: 16px;
+    }
+    .meta div, .card {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(20, 83, 45, 0.08);
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .cards {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.85), rgba(255,249,240,0.95));
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+    .label { font-size: 13px; color: var(--subtle); }
+    .value {
+      margin-top: 10px;
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 700;
+      line-height: 1;
+    }
+    .hint {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--subtle);
+    }
+    .grid {
+      grid-template-columns: 1fr;
+    }
+    .panel {
+      padding: 18px;
+    }
+    .filters {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      align-items: end;
+      margin-bottom: 12px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .field label {
+      font-size: 13px;
+      color: var(--subtle);
+      font-weight: 600;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.92);
+      color: var(--text);
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      color: #fff;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--green), var(--teal));
+    }
+    .quick {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .quick button {
+      background: rgba(20, 83, 45, 0.1);
+      color: var(--green);
+    }
+    .title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .sub {
+      font-size: 13px;
+      color: var(--subtle);
+      margin-bottom: 14px;
+    }
+    canvas {
+      width: 100%;
+      height: 300px;
+      background: rgba(255,255,255,0.75);
+      border-radius: 16px;
+      border: 1px solid var(--line);
+    }
+    .tables {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.82);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid rgba(31, 41, 51, 0.08);
+      font-size: 13px;
+      vertical-align: top;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #fff7ea;
+      color: var(--subtle);
+    }
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .ok { background: rgba(20,83,45,0.1); color: var(--green); }
+    .warn { background: rgba(180,83,9,0.12); color: var(--amber); }
+    .danger { background: rgba(185,28,28,0.12); color: var(--red); }
+    .empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--subtle);
+    }
+    @media (max-width: 1080px) {
+      .meta, .cards, .filters, .quick, .tables { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 720px) {
+      .wrap { width: min(100% - 16px, 100%); }
+      .meta, .cards, .filters, .quick, .tables { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>Server Monitor Dashboard</h1>
+      <p>监控 CPU、内存、磁盘汇总占用，并记录匹配 <code>ww/datasource</code> 的进程是否停止、启动或重启。页面仅保留最近 48 小时数据。</p>
+      <div class="meta">
+        <div id="meta-generated">生成时间: -</div>
+        <div id="meta-interval">采集间隔: -</div>
+        <div id="meta-pattern">进程关键字: -</div>
+      </div>
+    </section>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">最新 CPU 使用率</div>
+        <div class="value" id="latest-cpu">-</div>
+        <div class="hint" id="latest-time">最近采集时间 -</div>
+      </div>
+      <div class="card">
+        <div class="label">最新内存使用率</div>
+        <div class="value" id="latest-mem">-</div>
+        <div class="hint" id="latest-mem-hint">-</div>
+      </div>
+      <div class="card">
+        <div class="label">最新磁盘使用率</div>
+        <div class="value" id="latest-disk">-</div>
+        <div class="hint" id="latest-disk-hint">-</div>
+      </div>
+      <div class="card">
+        <div class="label">48 小时重启次数</div>
+        <div class="value" id="restart-count">0</div>
+        <div class="hint" id="process-hint">-</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="title">查询条件</div>
+      <div class="sub">可按时间范围、进程事件和资源阈值过滤，时间跨度会被限制在 48 小时内。</div>
+      <div class="filters">
+        <div class="field">
+          <label for="from-time">开始时间</label>
+          <input id="from-time" type="datetime-local" />
+        </div>
+        <div class="field">
+          <label for="to-time">结束时间</label>
+          <input id="to-time" type="datetime-local" />
+        </div>
+        <div class="field">
+          <label for="event-filter">进程事件</label>
+          <select id="event-filter">
+            <option value="all">全部</option>
+            <option value="restarted">仅重启</option>
+            <option value="started">仅启动</option>
+            <option value="stopped">仅停止</option>
+            <option value="none">无事件</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="cpu-threshold">CPU 高于 (%)</label>
+          <input id="cpu-threshold" type="number" min="0" max="100" step="1" placeholder="例如 80" />
+        </div>
+        <div class="field">
+          <label for="mem-threshold">内存高于 (%)</label>
+          <input id="mem-threshold" type="number" min="0" max="100" step="1" placeholder="例如 85" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="apply-filter" type="button">应用查询</button>
+        </div>
+      </div>
+      <div class="quick">
+        <button type="button" data-range="1">最近 1 小时</button>
+        <button type="button" data-range="6">最近 6 小时</button>
+        <button type="button" data-range="24">最近 24 小时</button>
+        <button type="button" data-range="48">最近 48 小时</button>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top: 16px;">
+      <div class="title">资源趋势</div>
+      <div class="sub" id="chart-summary">-</div>
+      <canvas id="trend-chart" width="1280" height="300"></canvas>
+    </div>
+
+    <div class="tables" style="margin-top: 16px;">
+      <div class="panel">
+        <div class="title">采集记录</div>
+        <div class="sub" id="record-count">0 条</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>CPU</th>
+                <th>内存</th>
+                <th>磁盘</th>
+                <th>进程状态</th>
+                <th>PID</th>
+                <th>事件</th>
+              </tr>
+            </thead>
+            <tbody id="records-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="title">进程事件</div>
+        <div class="sub" id="event-count">0 条</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>类型</th>
+                <th>详情</th>
+              </tr>
+            </thead>
+            <tbody id="events-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="monitor_data.js"></script>
+  <script>
+    const meta = window.MONITOR_META || { generatedAt: "", intervalSeconds: 60, retentionHours: 48, processPattern: "ww/datasource" };
+    const rawRecords = Array.isArray(window.MONITOR_RECORDS) ? window.MONITOR_RECORDS : [];
+    const rawEvents = Array.isArray(window.MONITOR_EVENTS) ? window.MONITOR_EVENTS : [];
+    const retentionMs = (meta.retentionHours || 48) * 3600 * 1000;
+
+    const refs = {
+      fromTime: document.getElementById("from-time"),
+      toTime: document.getElementById("to-time"),
+      eventFilter: document.getElementById("event-filter"),
+      cpuThreshold: document.getElementById("cpu-threshold"),
+      memThreshold: document.getElementById("mem-threshold"),
+      applyFilter: document.getElementById("apply-filter"),
+      recordsBody: document.getElementById("records-body"),
+      eventsBody: document.getElementById("events-body"),
+      recordCount: document.getElementById("record-count"),
+      eventCount: document.getElementById("event-count"),
+      chartSummary: document.getElementById("chart-summary"),
+      latestCpu: document.getElementById("latest-cpu"),
+      latestMem: document.getElementById("latest-mem"),
+      latestDisk: document.getElementById("latest-disk"),
+      latestTime: document.getElementById("latest-time"),
+      latestMemHint: document.getElementById("latest-mem-hint"),
+      latestDiskHint: document.getElementById("latest-disk-hint"),
+      restartCount: document.getElementById("restart-count"),
+      processHint: document.getElementById("process-hint"),
+      metaGenerated: document.getElementById("meta-generated"),
+      metaInterval: document.getElementById("meta-interval"),
+      metaPattern: document.getElementById("meta-pattern"),
+      canvas: document.getElementById("trend-chart")
+    };
+
+    function num(value) {
+      const v = Number(value);
+      return Number.isFinite(v) ? v : 0;
+    }
+
+    function pad(v) {
+      return String(v).padStart(2, "0");
+    }
+
+    function toLocalInput(date) {
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function parseDate(value) {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function tag(type, text) {
+      return `<span class="tag ${type}">${text}</span>`;
+    }
+
+    function usageStyle(value) {
+      const n = num(value);
+      if (n >= 90) return "danger";
+      if (n >= 75) return "warn";
+      return "ok";
+    }
+
+    function eventTag(name) {
+      if (name === "restarted") return tag("danger", "重启");
+      if (name === "stopped") return tag("warn", "停止");
+      if (name === "started") return tag("ok", "启动");
+      return tag("ok", "无事件");
+    }
+
+    function processTag(found) {
+      return found ? tag("ok", "运行中") : tag("warn", "未找到");
+    }
+
+    function initMeta() {
+      refs.metaGenerated.textContent = `生成时间: ${meta.generatedAt || "-"}`;
+      refs.metaInterval.textContent = `采集间隔: ${meta.intervalSeconds || 60} 秒`;
+      refs.metaPattern.textContent = `进程关键字: ${meta.processPattern || "ww/datasource"}`;
+      refs.restartCount.textContent = String(rawEvents.filter((e) => e.eventType === "restarted").length);
+
+      const latest = rawRecords[rawRecords.length - 1];
+      if (!latest) {
+        refs.processHint.textContent = "暂无数据";
+        return;
+      }
+
+      refs.latestCpu.textContent = `${latest.cpuUsedPct}%`;
+      refs.latestMem.textContent = `${latest.memUsedPct}%`;
+      refs.latestDisk.textContent = `${latest.diskUsedPct}%`;
+      refs.latestTime.textContent = `最近采集时间 ${latest.time}`;
+      refs.latestMemHint.textContent = `${latest.memUsedMb} MB / ${latest.memTotalMb} MB`;
+      refs.latestDiskHint.textContent = `${latest.diskUsedGb} GB / ${latest.diskTotalGb} GB`;
+      refs.processHint.textContent = latest.procFound ? `当前 PID: ${latest.procPids || "-"}` : "当前未匹配到目标进程";
+    }
+
+    function initRange() {
+      const latest = rawRecords[rawRecords.length - 1];
+      const latestMs = latest ? num(latest.epoch) * 1000 : Date.now();
+      refs.toTime.value = toLocalInput(new Date(latestMs));
+      refs.fromTime.value = toLocalInput(new Date(Math.max(latestMs - 6 * 3600 * 1000, latestMs - retentionMs)));
+    }
+
+    function filterRecords() {
+      const from = parseDate(refs.fromTime.value);
+      const to = parseDate(refs.toTime.value);
+      const latest = rawRecords[rawRecords.length - 1];
+      const latestMs = latest ? num(latest.epoch) * 1000 : Date.now();
+      const minAllowed = latestMs - retentionMs;
+      const fromMs = from ? Math.max(from.getTime(), minAllowed) : minAllowed;
+      const toMs = to ? Math.min(to.getTime(), latestMs) : latestMs;
+      const eventFilter = refs.eventFilter.value;
+      const cpuThreshold = refs.cpuThreshold.value ? num(refs.cpuThreshold.value) : null;
+      const memThreshold = refs.memThreshold.value ? num(refs.memThreshold.value) : null;
+
+      return rawRecords.filter((item) => {
+        const timeMs = num(item.epoch) * 1000;
+        if (timeMs < fromMs || timeMs > toMs) return false;
+        if (eventFilter !== "all" && item.procEvent !== eventFilter) return false;
+        if (cpuThreshold !== null && num(item.cpuUsedPct) < cpuThreshold) return false;
+        if (memThreshold !== null && num(item.memUsedPct) < memThreshold) return false;
+        return true;
+      });
+    }
+
+    function filterEvents(records) {
+      if (!records.length) return [];
+      const minEpoch = Math.min(...records.map((r) => num(r.epoch)));
+      const maxEpoch = Math.max(...records.map((r) => num(r.epoch)));
+      return rawEvents.filter((item) => {
+        const epoch = num(item.epoch);
+        return epoch >= minEpoch && epoch <= maxEpoch;
+      });
+    }
+
+    function renderRecords(records) {
+      refs.recordCount.textContent = `${records.length} 条`;
+      if (!records.length) {
+        refs.recordsBody.innerHTML = '<tr><td colspan="7" class="empty">当前条件下没有匹配记录。</td></tr>';
+        return;
+      }
+
+      refs.recordsBody.innerHTML = records.slice().reverse().map((item) => `
+        <tr>
+          <td>${item.time}</td>
+          <td>${tag(usageStyle(item.cpuUsedPct), `${item.cpuUsedPct}%`)}</td>
+          <td>${tag(usageStyle(item.memUsedPct), `${item.memUsedPct}%`)}<br>${item.memUsedMb} / ${item.memTotalMb} MB</td>
+          <td>${tag(usageStyle(item.diskUsedPct), `${item.diskUsedPct}%`)}<br>${item.diskUsedGb} / ${item.diskTotalGb} GB</td>
+          <td>${processTag(item.procFound)}</td>
+          <td>${item.procPids || "-"}</td>
+          <td>${eventTag(item.procEvent)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderEvents(events) {
+      refs.eventCount.textContent = `${events.length} 条`;
+      if (!events.length) {
+        refs.eventsBody.innerHTML = '<tr><td colspan="3" class="empty">当前时间范围内没有进程事件。</td></tr>';
+        return;
+      }
+
+      refs.eventsBody.innerHTML = events.slice().reverse().map((item) => `
+        <tr>
+          <td>${item.time}</td>
+          <td>${eventTag(item.eventType)}</td>
+          <td>${item.detail}</td>
+        </tr>
+      `).join("");
+    }
+
+    function drawChart(records) {
+      const canvas = refs.canvas;
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+      const padding = { top: 24, right: 24, bottom: 28, left: 48 };
+      const innerWidth = width - padding.left - padding.right;
+      const innerHeight = height - padding.top - padding.bottom;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#fffaf1";
+      ctx.fillRect(0, 0, width, height);
+      ctx.strokeStyle = "rgba(31,41,51,0.12)";
+      ctx.font = "12px Segoe UI";
+      ctx.fillStyle = "#52606d";
+
+      for (let i = 0; i <= 5; i += 1) {
+        const y = padding.top + innerHeight * i / 5;
+        const value = 100 - i * 20;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(width - padding.right, y);
+        ctx.stroke();
+        ctx.fillText(String(value), 12, y + 4);
+      }
+
+      if (!records.length) {
+        ctx.fillText("暂无可绘制数据", width / 2 - 42, height / 2);
+        refs.chartSummary.textContent = "无数据";
+        return;
+      }
+
+      const minEpoch = num(records[0].epoch);
+      const maxEpoch = num(records[records.length - 1].epoch);
+      const span = Math.max(maxEpoch - minEpoch, 1);
+      const lines = [
+        { key: "cpuUsedPct", color: "#14532d", label: "CPU" },
+        { key: "memUsedPct", color: "#0f766e", label: "内存" },
+        { key: "diskUsedPct", color: "#b45309", label: "磁盘" }
+      ];
+
+      lines.forEach((line, index) => {
+        ctx.beginPath();
+        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = line.color;
+        records.forEach((item, i) => {
+          const x = padding.left + (num(item.epoch) - minEpoch) / span * innerWidth;
+          const y = padding.top + innerHeight - num(item[line.key]) / 100 * innerHeight;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        const lx = width - 190 + index * 56;
+        ctx.fillStyle = line.color;
+        ctx.fillRect(lx, 12, 10, 10);
+        ctx.fillStyle = "#1f2933";
+        ctx.fillText(line.label, lx + 14, 21);
+      });
+
+      [0, Math.floor((records.length - 1) / 2), records.length - 1].filter((v, i, arr) => arr.indexOf(v) === i).forEach((idx) => {
+        const item = records[idx];
+        const x = padding.left + (num(item.epoch) - minEpoch) / span * innerWidth;
+        ctx.fillStyle = "#52606d";
+        ctx.fillText(item.time.slice(5, 16), x - 28, height - 8);
+      });
+
+      refs.chartSummary.textContent = `时间范围 ${records[0].time} 至 ${records[records.length - 1].time}`;
+    }
+
+    function render() {
+      const records = filterRecords();
+      const events = filterEvents(records);
+      renderRecords(records);
+      renderEvents(events);
+      drawChart(records);
+    }
+
+    initMeta();
+    initRange();
+    render();
+
+    refs.applyFilter.addEventListener("click", render);
+    document.querySelectorAll("[data-range]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const hours = Number(button.dataset.range);
+        const latest = rawRecords[rawRecords.length - 1];
+        const latestMs = latest ? num(latest.epoch) * 1000 : Date.now();
+        refs.toTime.value = toLocalInput(new Date(latestMs));
+        refs.fromTime.value = toLocalInput(new Date(Math.max(latestMs - hours * 3600 * 1000, latestMs - retentionMs)));
+        render();
+      });
+    });
+  </script>
+</body>
+</html>
