@@ -1,17 +1,61 @@
-# Server-Monitor-Dashboard
-监控 CPU、内存、磁盘汇总占用，并记录匹配 ww/datasource 的进程是否停止、启动或重启。页面仅保留最近 48 小时数据。
-Linux 服务器上的监控方案，核心脚本在 scripts/server_monitor/server_monitor.sh，查询页模板在 scripts/server_monitor/monitor_report.html，使用  说明在 scripts/server_monitor/README.md。我也把初始化后
-的页面和空数据文件放到了 outputs/server_monitor/monitor_report.html 和 outputs/server_monitor/
-  monitor_data.js。
+# Server Monitor 使用说明
 
-  这个脚本每 60 秒采集一轮 CPU、内存、磁盘汇总占用，并监控命令行包含 ww/datasource 的进程。数据只保留最近 48 小时，采集结果写入 records.tsv / events.tsv，同时生成
-  monitor_data.js，浏览器直接打开 monitor_report.html 就能按时间范围、事件类型、CPU 阈值、内存阈值查询记录，还能看趋势图和重启事件。
+## 文件说明
 
-  在 Linux 服务器上用法就是：
+- `server_monitor.sh`：Linux 服务器监控脚本
+- `monitor_report.html`：本地查询页面模板
 
-  chmod +x server_monitor.sh
-  ./server_monitor.sh start
-  ./server_monitor.sh status
+## 监控内容
 
-  如果你想直接开始部署，建议把 scripts/server_monitor 目录整体拷到服务器上执行。当前这边是 Windows 沙箱环境，Git Bash 本身启动失败，所以我没法在本机真正跑一遍
-  Linux 采集流程；脚本逻辑和文件已经写完，但最终请在目标 Linux 服务器上执行一次 ./server_monitor.sh run-once 或 start 做实机验证。
+- CPU 使用率
+- 内存使用率与已用/总量
+- 本地磁盘汇总使用率与已用/总量
+- 匹配 `ww/datasource` 的进程是否停止、启动或重启
+
+## 数据保留
+
+- 每 `60` 秒采集一轮
+- 仅保留最近 `48` 小时数据
+- 页面支持按时间范围、进程事件、CPU 阈值、内存阈值查询
+
+## 服务器启动方式
+
+```bash
+chmod +x server_monitor.sh
+./server_monitor.sh start
+```
+
+## 常用命令
+
+```bash
+./server_monitor.sh start
+./server_monitor.sh stop
+./server_monitor.sh status
+./server_monitor.sh run-once
+./server_monitor.sh render
+```
+
+## 默认输出目录
+
+- 优先输出到脚本相对路径 `../../outputs/server_monitor`
+- 如果该目录不存在，则退回到脚本目录下的 `data`
+
+输出目录中会生成：
+
+- `monitor_report.html`
+- `monitor_data.js`
+- `records.tsv`
+- `events.tsv`
+- `monitor.state`
+- `monitor.log`
+
+## 查询方式
+
+直接用浏览器打开输出目录里的 `monitor_report.html` 即可。
+
+## 进程重启判定
+
+- 上一轮有匹配进程，这一轮签名变化，记为 `restarted`
+- 上一轮没有，这一轮重新出现，且历史上出现过，记为 `restarted`
+- 上一轮有，这一轮没有，记为 `stopped`
+- 第一次观测到进程出现，记为 `started`
